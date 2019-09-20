@@ -1,0 +1,15 @@
+name = Views Exclusion List
+description = Allows views to exclude results from other views
+version = 7.x-1.0
+core = 7.x
+package = Views
+
+; Config path
+configure = admin/config/content/views-exclusion-list
+
+; Module classes.
+files[] = views/views_exclusion_list_filter.inc
+files[] = views/views_exclusion_list_display_extender.inc
+
+; Module dependencies.
+dependencies[] = views

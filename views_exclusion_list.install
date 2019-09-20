@@ -1,0 +1,22 @@
+<?php
+
+/**
+ * @file
+ * Installation functions for the Views Exclusion List module.
+ */
+
+
+/**
+ * Implements hook_install().
+ */
+function views_exclusion_list_install() {
+  // By default we enable the module for nodes only.
+  variable_set('views_exclusion_list_enabled_entities', array('node' => 'node'));
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function views_exclusion_list_uninstall() {
+  variable_del('views_exclusion_list_enabled_entities');
+}

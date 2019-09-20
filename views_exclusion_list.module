@@ -1,0 +1,152 @@
+<?php
+
+/**
+ * @file
+ * Main file of the Views Exclusion List module.
+ */
+
+define('EXCLUSION_LIST_STORAGE', '__views_exclusion_list_storage__');
+
+/**
+ * Implements hook_menu().
+ */
+function views_exclusion_list_menu() {
+  $items = array();
+  $items['admin/config/content/views-exclusion-list'] = [
+    'title' => 'Views Exclusion List',
+    'description' => 'Manage Views Exclusion List settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('views_exclusion_list_settings_form'),
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_NORMAL_ITEM,
+    'file' => 'views_exclusion_list.admin.inc',
+  ];
+  return $items;
+}
+
+/**
+ * Implements hook_views_api().
+ */
+function views_exclusion_list_views_api() {
+  return array(
+    'api' => '3.0',
+    'path' => drupal_get_path('module', 'views_exclusion_list') . '/views',
+  );
+}
+
+/**
+ * Creates the storage identifier string for a given view.
+ *
+ * @param object $view
+ *   A Views view object.
+ *
+ * @return string
+ *   Unique (per view and view display) identifier to be used as key in the
+ *   global storage array.
+ */
+function views_exclusion_list_get_view_id($view) {
+  $view_id = "{$view->name}:{$view->current_display}";
+  return $view_id;
+}
+
+/**
+ * Implements hook_views_post_execute().
+ */
+function views_exclusion_list_views_post_execute(&$view) {
+  // First of all, check if this view can contribute items at all.
+  if (!views_exclusion_list_enabled_in_view($view)) {
+    return;
+  }
+
+  // Check if the current display settings requires to ignore the list.
+  $display_options = $view->display[$view->current_display]->display_options;
+  if (isset($display_options['exclusion_list_ignore']) && $display_options['exclusion_list_ignore']) {
+    return;
+  }
+
+  $items = array();
+  foreach ($view->result as $result) {
+    // Check if the base field is present. This may not be always the case, for
+    // example when Views is generating a summary.
+    if (isset($result->{$view->base_field})) {
+      $id = $result->{$view->base_field};
+      $items[$id] = $id;
+    }
+  }
+
+  // Save display results into the exclusion list. Even if the entry may end up
+  // empty, this allows us to know that the view has been loaded so we don't
+  // keep loading empty views when the force loading setting has been enabled.
+  $view_id = views_exclusion_list_get_view_id($view);
+  views_exclusion_list_add($view_id, $items);
+}
+
+/**
+ * Add IDs to the exclusion list.
+ *
+ * @param string $view_id
+ *   View identifier in the form view_name:display_name, used as unique key in
+ *   the array.
+ * @param array $items
+ *   Array of IDs to be added to the exclusion list.
+ */
+function views_exclusion_list_add($view_id, array $items) {
+  $excluded = &drupal_static(EXCLUSION_LIST_STORAGE);
+  $excluded[$view_id] = $items;
+}
+
+/**
+ * Allows to remove one specific entry from the global storage.
+ *
+ * @param string $view_id
+ *   The view identifier.
+ * @param int $id
+ *   The item identifier to be removed.
+ */
+function views_exclusion_list_remove_entry($view_id, $id) {
+  $excluded = &drupal_static(EXCLUSION_LIST_STORAGE);
+  if (isset($excluded[$view_id])) {
+    unset($excluded[$view_id][$id]);
+  }
+}
+
+/**
+ * Helper function to determine if a view supports module operations.
+ *
+ * @param object $view
+ *   The view object.
+ *
+ * @return bool
+ *   TRUE if the view operates on an supported entity, FALSE otherwise.
+ */
+function views_exclusion_list_enabled_in_view($view) {
+  foreach (views_exclusion_list_enabled_entities() as $entity_type => $info) {
+    if ($info['table'] == $view->base_table) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+/**
+ * Returns information about the entities that are enabled in the module.
+ *
+ * @return array|mixed
+ *   Associative array keyed by entity type with entity base field and base
+ *   table information.
+ */
+function views_exclusion_list_enabled_entities() {
+  $entities = &drupal_static(__FUNCTION__);
+  if (!isset($entities)) {
+    $entities = array();
+    $enabled = variable_get('views_exclusion_list_enabled_entities');
+    foreach (array_filter($enabled) as $entity_type) {
+      $info = entity_get_info($entity_type);
+      $entities[$entity_type] = array(
+        'field' => $info['entity keys']['id'],
+        'table' => $info['base table'],
+      );
+    }
+  }
+  return $entities;
+}
